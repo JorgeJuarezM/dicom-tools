@@ -5,12 +5,13 @@
 //! Opción `-s/--show-tags`: muestra todos los tags del archivo (solo un archivo).
 
 mod columns;
+mod diff;
 mod options;
 
 use clap::Parser;
 use columns::{extract_row_from_path, print_table, QueryColumn};
-use dicom::object::open_file;
 use dicom::dump::dump_file;
+use dicom::object::open_file;
 use options::CliOptions;
 use std::process::exit;
 
@@ -25,6 +26,14 @@ fn main() {
 
     if opts.show_tags() {
         if let Err(e) = run_show_tags(&opts) {
+            eprintln!("{}", e);
+            exit(1);
+        }
+        return;
+    }
+
+    if opts.diff() {
+        if let Err(e) = run_diff(&opts) {
             eprintln!("{}", e);
             exit(1);
         }
@@ -89,6 +98,24 @@ fn run_single_tag(opts: &CliOptions) -> Result<(), String> {
     Ok(())
 }
 
+/// Modo -d: compara dos archivos DICOM a nivel de tags (sin PixelData). Salida en formato diff.
+fn run_diff(opts: &CliOptions) -> Result<(), String> {
+    let files = opts.files();
+    if files.len() != 2 {
+        return Err(
+            "Uso con -d/--diff: dcmtk --diff <archivo1.dcm> <archivo2.dcm>\nSe requieren exactamente 2 archivos.".into(),
+        );
+    }
+    let (p1, p2) = (&files[0], &files[1]);
+    if !p1.exists() {
+        return Err(format!("Error: el archivo no existe: {}", p1.display()));
+    }
+    if !p2.exists() {
+        return Err(format!("Error: el archivo no existe: {}", p2.display()));
+    }
+    diff::run_diff(p1, p2)
+}
+
 /// Modo -s: muestra todos los tags del archivo. Solo se acepta un archivo.
 fn run_show_tags(opts: &CliOptions) -> Result<(), String> {
     let files = opts.files();
@@ -110,7 +137,7 @@ fn run_show_tags(opts: &CliOptions) -> Result<(), String> {
 /// Parsea argumentos con clap. Mantiene mensajes de uso coherentes con la especificación.
 fn parse_args() -> Result<CliOptions, String> {
     let opts = CliOptions::parse();
-    if opts.files.is_empty() && !opts.show_tags && !opts.single_tag {
+    if opts.files.is_empty() && !opts.show_tags && !opts.single_tag && !opts.diff {
         return Err("Uso: dcmtk <archivo.dcm> [archivo2.dcm ...]\nEjemplo: dcmtk myfile.dcm".into());
     }
     Ok(opts)
