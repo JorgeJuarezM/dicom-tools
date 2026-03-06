@@ -26,6 +26,43 @@ dcmtk -h
 
 La ayuda muestra las opciones y, al final, una lista de tags comunes agrupados por categoría (Paciente, Estudio, Serie, Instancia/Imagen) y el keyword especial `Date`.
 
+### Mostrar todos los tags del archivo (`-s` / `--show-tags`)
+
+Con `-s` se listan **todos** los tags contenidos en el archivo DICOM (incluido el grupo de meta-información y el dataset). En este modo **solo se acepta un archivo**.
+
+```bash
+dcmtk -s myfile.dcm
+```
+
+Si no se pasa archivo o se pasan varios, se muestra un error y se sale con código 1.
+
+Ejemplo de salida con `-s` (inicio del listado):
+
+```
+Media Storage SOP Class UID: 1.2.840.10008.5.1.4.1.1.6.1
+Media Storage SOP Instance UID: 1.2.840.113663.1500.1.527525534.3.1.20260112.183027.299
+Transfer Syntax: 1.2.840.10008.1.2.4.70 (JPEG Lossless, Non-Hierarchical, First-Order Prediction)
+Implementation Class UID: 1.2.40.0.13.1.3
+Implementation version name: dcm4che-5.23.2
+
+----------------------------------------------------------
+(0008,0005) SpecificCharacterSet         CS (1, 10 bytes): "ISO_IR 100"
+(0008,0008) ImageType                    CS (3, 18 bytes): ["ORIGINAL", "PRIMARY", ""]
+(0008,0012) InstanceCreationDate         DA (1,  8 bytes): 2026-01-12
+(0008,0013) InstanceCreationTime         TM (1,  6 bytes): 18:30:27
+(0008,0016) SOPClassUID                  UI (1, 28 bytes): "1.2.840.10008.5.1.4.1.1.6.1"
+(0008,0018) SOPInstanceUID               UI (1, 56 bytes): "1.2.840.113663.1500.1.527525534.3.1.20260112.183027.2...
+(0008,0020) StudyDate                    DA (1,  8 bytes): 2026-01-12
+(0008,0021) SeriesDate                   DA (1,  8 bytes): 2026-01-12
+(0008,0050) AccessionNumber              SH (1, 10 bytes): "g-04167-2"
+(0008,0060) Modality                     CS (1,  2 bytes): "US"
+(0010,0010) PatientName                  PN (1, 30 bytes): "CAMBEROS ALMADA^MARIA INES^^^"
+(0010,0020) PatientID                   LO (1, 12 bytes): "CAMI0410190"
+...
+```
+
+Las secuencias (SQ) se muestran con ítems indentados; el listado continúa hasta el final del dataset.
+
 ## Uso básico
 
 ### Obtener información de archivos DICOM
@@ -57,7 +94,30 @@ dcmtk -q SOPInstanceUID,Modality,SeriesDescription myfile.dcm
 - Si falta un tag en el DICOM, la celda se muestra vacía.
 - La fecha se muestra como `YYYY.MM.DD HH:MM:SS` a partir de Study Date y Study Time.
 
-Ejemplo (sin `-q`, columnas por defecto):
+Ejemplo con `-q` (columnas elegidas: Patient Name, Accession Number, Study ID):
+
+```bash
+dcmtk -q PatientName,AccessionNumber,StudyID myfile.dcm
+```
+
+```
+  Patient Name  Accession Number  Study ID  
+  CAMBEROS ALM  g-04167-2         USG       
+```
+
+Ejemplo con `-q` (varias columnas y varios archivos):
+
+```bash
+dcmtk -q Modality,SeriesDescription,SOPInstanceUID myfile.dcm myfile.dcm
+```
+
+```
+  Modality    Series Description  SOP Instance UID        
+  US         USG                 1.2.840.113663.1500...  
+  US         USG                 1.2.840.113663.1500...  
+```
+
+Ejemplo sin `-q` (columnas por defecto):
 
 ```
   Accession Number  Patient Name  Modality    Date      
@@ -70,3 +130,4 @@ Ejemplo (sin `-q`, columnas por defecto):
 - **Archivo inexistente:** mensaje `Error: el archivo no existe: <ruta>` y salida 1. Con varios archivos, se comprueba que todos existan antes de abrir ninguno.
 - **Archivo no DICOM o corrupto:** mensaje `Error al abrir el archivo DICOM: <detalle>` y salida 1.
 - **Keyword desconocido en `-q`:** mensaje `Columna desconocida: <keyword>` y salida 1.
+- **Con `-s`:** sin archivo → "Uso con -s: dcmtk -s <archivo.dcm>". Más de un archivo → "Con -s/--show-tags solo se acepta un archivo.". Salida 1.

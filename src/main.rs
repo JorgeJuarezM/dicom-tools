@@ -2,12 +2,15 @@
 //!
 //! Uso: `dcmtk [opciones] <archivo.dcm> [archivo2.dcm ...]`
 //! Opción `-q/--query`: columnas a mostrar (keywords separados por coma).
+//! Opción `-s/--show-tags`: muestra todos los tags del archivo (solo un archivo).
 
 mod columns;
 mod options;
 
 use clap::Parser;
 use columns::{extract_row_from_path, print_table, QueryColumn};
+use dicom::object::open_file;
+use dicom::dump::dump_file;
 use options::CliOptions;
 use std::process::exit;
 
@@ -19,6 +22,14 @@ fn main() {
             exit(1);
         }
     };
+
+    if opts.show_tags() {
+        if let Err(e) = run_show_tags(&opts) {
+            eprintln!("{}", e);
+            exit(1);
+        }
+        return;
+    }
 
     let columns = match resolve_columns(&opts) {
         Ok(c) => c,
@@ -49,10 +60,28 @@ fn main() {
     print_table(&columns, &rows);
 }
 
+/// Modo -s: muestra todos los tags del archivo. Solo se acepta un archivo.
+fn run_show_tags(opts: &CliOptions) -> Result<(), String> {
+    let files = opts.files();
+    if files.is_empty() {
+        return Err("Uso con -s: dcmtk -s <archivo.dcm>\nCon -s solo se acepta un archivo.".into());
+    }
+    if files.len() > 1 {
+        return Err("Con -s/--show-tags solo se acepta un archivo.".into());
+    }
+    let path = &files[0];
+    if !path.exists() {
+        return Err(format!("Error: el archivo no existe: {}", path.display()));
+    }
+    let obj = open_file(path).map_err(|e| format!("Error al abrir el archivo DICOM: {}", e))?;
+    dump_file(&obj).map_err(|e| format!("Error al volcar tags: {}", e))?;
+    Ok(())
+}
+
 /// Parsea argumentos con clap. Mantiene mensajes de uso coherentes con la especificación.
 fn parse_args() -> Result<CliOptions, String> {
     let opts = CliOptions::parse();
-    if opts.files.is_empty() {
+    if opts.files.is_empty() && !opts.show_tags {
         return Err("Uso: dcmtk <archivo.dcm> [archivo2.dcm ...]\nEjemplo: dcmtk myfile.dcm".into());
     }
     Ok(opts)

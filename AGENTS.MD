@@ -20,11 +20,13 @@ A continuación se describe el comportamiento que el programa debe tener para qu
   - `dicom::object::open_file` para abrir el archivo.
   - `dicom::object::DicomObject` y `dicom::object::DicomAttribute` (traits).
   - `dicom::dictionary_std::tags` para los tags estándar.
+  - `dicom::dump::dump_file` para el modo `-s` (listar todos los tags del archivo).
 
 ### Interfaz de línea de comandos
 
-- **Argumentos:** opción `-q/--query` opcional; uno o más argumentos posicionales (rutas de archivos DICOM). Se procesan en el orden indicado.
-- **Ayuda:** la opción `-h` / `--help` (proporcionada por clap) debe mostrar el uso estándar y, a continuación, una lista de **tags DICOM comunes** utilizables con `-q`, agrupados por categoría (Paciente, Estudio, Serie, Instancia/Imagen) y el keyword especial `Date`, más ejemplos de uso.
+- **Argumentos:** opción `-q/--query` opcional; opción `-s` / `--show-tags` opcional; uno o más argumentos posicionales (rutas de archivos DICOM). Se procesan en el orden indicado.
+- **Opción `-s` / `--show-tags`:** muestra todos los tags contenidos en el archivo DICOM (meta + dataset). En este modo **solo se acepta un archivo**. Si no se pasa archivo: mensaje "Uso con -s: dcmtk -s <archivo.dcm>" y "Con -s solo se acepta un archivo.", exit 1. Si se pasan dos o más archivos: "Con -s/--show-tags solo se acepta un archivo.", exit 1. La salida se hace con `dicom::dump::dump_file(&obj)` (formato legible con tag, nombre, VR, tamaño y valor).
+- **Ayuda:** la opción `-h` / `--help` (proporcionada por clap) debe mostrar el uso estándar y, a continuación, una lista de **tags DICOM comunes** utilizables con `-q`, agrupados por categoría (Paciente, Estudio, Serie, Instancia/Imagen) y el keyword especial `Date`, más ejemplos de uso (incluido `-s`).
 - **Sin argumentos:** imprimir en stderr exactamente:
   - `Uso: dcmtk <archivo.dcm> [archivo2.dcm ...]`
   - `Ejemplo: dcmtk myfile.dcm`
@@ -75,19 +77,40 @@ A continuación se describe el comportamiento que el programa debe tener para qu
 
 ### Modificadores
 
-- **`-q` / `--query`:** lista de columnas a mostrar (keywords DICOM separados por coma). Si no se especifica, se usan las columnas por defecto (Accession Number, Patient Name, Modality, Date).
-- **Keywords admitidos (case-sensitive):** Cualquier tag definido en el estándar DICOM. Se debe usar el diccionario estándar (p. ej. `StandardDataDictionary` y `DataDictionary::by_name`) para resolver el keyword al tag y al nombre para la cabecera. El ancho de la columna por defecto debe ser **10 caracteres o el tamaño del nombre del tag (el que resulte mayor)**. La columna compuesta "Date" (StudyDate + StudyTime) se admite como keyword "Date"; el resto se buscan en el diccionario (p. ej. "PatientName", "StudyID", "SOPInstanceUID").
-- **Ejemplo:** `dcmtk -q PatientName,AccessionNumber,StudyId myfile.dcm`  
-  Salida: una línea de cabecera con "Patient Name", "Accession Number", "Study ID", y una fila por archivo con los valores (mismo formato de anchos y truncado). Si un keyword es desconocido, se imprime en stderr "Columna desconocida: <keyword>" y se sale con 1.
+#### `-q` / `--query`
+
+- **Propósito:** elegir qué columnas mostrar y en qué orden. Sin `-q` se usan las columnas por defecto: Accession Number, Patient Name, Modality, Date.
+- **Sintaxis:** `-q KEYWORD1,KEYWORD2,...` (keywords DICOM separados por coma, sin espacios o con espacios que se ignoran).
+- **Keywords admitidos (case-sensitive):** Cualquier tag definido en el estándar DICOM. Resolución con el diccionario estándar (`StandardDataDictionary`, `DataDictionary::by_name`): el keyword se resuelve al tag y al nombre para la cabecera (p. ej. "PatientName" → "Patient Name"). Keyword especial: **"Date"** (columna compuesta StudyDate + StudyTime, formato `YYYY.MM.DD HH:MM:SS`). Ejemplos de keywords: PatientName, AccessionNumber, Modality, StudyID, SOPInstanceUID, SeriesDescription.
+- **Ancho de columna:** para cada columna, **máximo entre 10 caracteres y la longitud del nombre del tag** (en caracteres). Los valores se truncan a ese ancho (UTF-8 safe), sin sufijo tipo "...".
+- **Salida:** primera línea = cabecera (títulos de columna en el orden indicado); siguientes líneas = una fila por archivo, mismas columnas y anchos. Prefijo de línea: dos espacios. Celdas vacías si el tag no está presente en el DICOM.
+- **Errores:** si un keyword no existe en el diccionario, mensaje en stderr "Columna desconocida: <keyword>" y salida con código 1.
+- **Ejemplos de uso:**
+  - `dcmtk -q PatientName,AccessionNumber,StudyID myfile.dcm` → columnas Patient Name, Accession Number, Study ID.
+  - `dcmtk -q Modality,Date file1.dcm file2.dcm` → dos columnas y dos filas (una por archivo).
+  - `dcmtk -q SOPInstanceUID,SeriesDescription myfile.dcm` → columnas SOP Instance UID y Series Description.
+
+#### `-s` / `--show-tags`
+
+- **Propósito:** mostrar todos los tags contenidos en el archivo DICOM (meta-información y dataset), en formato legible.
+- **Sintaxis:** `-s <archivo.dcm>`. Solo se acepta **un** archivo.
+- **Comportamiento:** se abre el archivo con `open_file`, se vuelca con `dicom::dump::dump_file(&obj)`. La salida incluye primero la meta (Media Storage SOP Class/Instance UID, Transfer Syntax, etc.) y luego cada elemento del dataset con tag `(gggg,eeee)`, nombre del atributo, VR, tamaño y valor; las secuencias se muestran anidadas con indentación.
+- **Salida:** texto en stdout, formato del módulo `dicom::dump` (líneas con tag, nombre, VR, longitud y valor; secuencias con ítems indentados).
+- **Errores:** sin archivo → "Uso con -s: dcmtk -s <archivo.dcm>" y "Con -s solo se acepta un archivo.", exit 1. Más de un archivo → "Con -s/--show-tags solo se acepta un archivo.", exit 1. Archivo inexistente o no DICOM → mensaje en stderr y exit 1.
+- **Ejemplos de uso:**
+  - `dcmtk -s myfile.dcm` → listado completo de tags del archivo.
+  - `dcmtk -s` (sin archivo) → error de uso.
+  - `dcmtk -s a.dcm b.dcm` → error "solo se acepta un archivo".
 
 ### Resumen de comportamiento esperado
 
-1. Parsear argumentos (p. ej. con `clap`): opción `-q/--query` opcional, uno o más archivos posicionales. Validar que haya al menos un archivo; si no, imprimir en stderr "Uso: dcmtk <archivo.dcm> [archivo2.dcm ...]" y "Ejemplo: dcmtk myfile.dcm", y exit 1.
-2. Si hay `-q`, resolver la lista de keywords a columnas con el diccionario estándar DICOM (`by_name`); si algún keyword no existe en el diccionario, mensaje "Columna desconocida: <keyword>" y exit 1. Si no hay `-q`, usar columnas por defecto (AccessionNumber, PatientName, Modality, Date).
-3. Validar que todos los paths existan; si alguno no existe, mensaje en stderr y exit 1.
-4. Abrir cada archivo DICOM con la API del crate `dicom` en orden; si alguno falla, mensaje en stderr y exit 1.
-5. Para cada archivo: extraer los valores de las columnas elegidas (tags con `attr_opt` o campo compuesto Date); truncar cada valor al ancho de su columna (por caracteres, UTF-8 safe).
-6. Imprimir una línea de cabecera (títulos truncados al ancho de columna) y luego una línea por archivo (prefijo `  `, columnas separadas por espacios, anchos fijos).
+1. Parsear argumentos (p. ej. con `clap`): opciones `-q/--query` y `-s/--show-tags` opcionales, uno o más archivos posicionales. Si no hay `-s` y no hay archivos, imprimir en stderr "Uso: dcmtk <archivo.dcm> [archivo2.dcm ...]" y "Ejemplo: dcmtk myfile.dcm", y exit 1.
+2. **Si hay `-s`:** validar que se haya pasado exactamente un archivo; si no hay archivo o hay más de uno, mensaje en stderr y exit 1. Abrir el archivo, llamar `dicom::dump::dump_file(&obj)` y terminar.
+3. Si hay `-q`, resolver la lista de keywords a columnas con el diccionario estándar DICOM (`by_name`); si algún keyword no existe en el diccionario, mensaje "Columna desconocida: <keyword>" y exit 1. Si no hay `-q`, usar columnas por defecto (AccessionNumber, PatientName, Modality, Date).
+4. Validar que todos los paths existan; si alguno no existe, mensaje en stderr y exit 1.
+5. Abrir cada archivo DICOM con la API del crate `dicom` en orden; si alguno falla, mensaje en stderr y exit 1.
+6. Para cada archivo: extraer los valores de las columnas elegidas (tags con `attr_opt` o campo compuesto Date); truncar cada valor al ancho de su columna (por caracteres, UTF-8 safe).
+7. Imprimir una línea de cabecera (títulos truncados al ancho de columna) y luego una línea por archivo (prefijo `  `, columnas separadas por espacios, anchos fijos).
 
 ### Arquitectura del código (escalable y reutilizable)
 

@@ -25,10 +25,15 @@ const AFTER_HELP: &str = r#"DICOM TAGS COMUNES (utilizables con -q, case-sensiti
   Columna compuesta (keyword especial):
     Date   (equivale a StudyDate + StudyTime formateados como YYYY.MM.DD HH:MM:SS)
 
+  Opción -s/--show-tags:
+    Muestra todos los tags contenidos en el archivo DICOM. Solo se acepta un archivo.
+    Ejemplo: dcmtk -s myfile.dcm
+
   Ejemplos:
     dcmtk myfile.dcm
     dcmtk -q PatientName,AccessionNumber,StudyID myfile.dcm
     dcmtk -q Modality,SeriesDescription,SOPInstanceUID file1.dcm file2.dcm
+    dcmtk -s myfile.dcm
 "#;
 
 /// Opciones de la aplicación: modificadores y argumentos posicionales.
@@ -40,11 +45,15 @@ const AFTER_HELP: &str = r#"DICOM TAGS COMUNES (utilizables con -q, case-sensiti
     after_help = AFTER_HELP
 )]
 pub struct CliOptions {
+    /// Muestra todos los tags contenidos en el archivo DICOM (solo se acepta un archivo).
+    #[arg(short = 's', long = "show-tags")]
+    pub show_tags: bool,
+
     /// Columnas a mostrar (keywords DICOM separados por coma). Si no se especifica, se usan las columnas por defecto.
     #[arg(short = 'q', long = "query", value_name = "COLUMNAS")]
     pub query: Option<String>,
 
-    /// Uno o más archivos DICOM a procesar.
+    /// Uno o más archivos DICOM a procesar. Con -s/--show-tags solo se acepta un archivo.
     #[arg(value_name = "archivo.dcm")]
     pub files: Vec<PathBuf>,
 }
@@ -53,6 +62,11 @@ impl CliOptions {
     /// Rutas de archivos a procesar (en orden).
     pub fn files(&self) -> &[PathBuf] {
         &self.files
+    }
+
+    /// Si se usó -s/--show-tags (listar todos los tags del archivo).
+    pub fn show_tags(&self) -> bool {
+        self.show_tags
     }
 
     /// Si se usó -q/--query, devuelve la lista de keywords en orden; si no, None.
