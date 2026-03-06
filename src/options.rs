@@ -29,6 +29,11 @@ const AFTER_HELP: &str = r#"DICOM TAGS COMUNES (utilizables con -q, case-sensiti
     Muestra todos los tags contenidos en el archivo DICOM. Solo se acepta un archivo.
     Ejemplo: dcmtk -s myfile.dcm
 
+  Opción -t/--single-tag:
+    Muestra solo el valor de un tag por archivo (una línea por archivo, sin cabecera).
+    Por defecto usa SOPInstanceUID. Con -q se usa el tag indicado (solo uno).
+    Uso con xargs: dcmtk -t *.dcm | xargs -I {} echo "UID: {}"
+
   Ejemplos:
     dcmtk myfile.dcm
     dcmtk -q PatientName,AccessionNumber,StudyID myfile.dcm
@@ -49,6 +54,10 @@ pub struct CliOptions {
     #[arg(short = 's', long = "show-tags")]
     pub show_tags: bool,
 
+    /// Muestra solo un tag por archivo (una línea por archivo, sin cabecera). Por defecto StudyInstanceUID; con -q se usa el tag indicado (solo uno).
+    #[arg(short = 't', long = "single-tag")]
+    pub single_tag: bool,
+
     /// Columnas a mostrar (keywords DICOM separados por coma). Si no se especifica, se usan las columnas por defecto.
     #[arg(short = 'q', long = "query", value_name = "COLUMNAS")]
     pub query: Option<String>,
@@ -67,6 +76,11 @@ impl CliOptions {
     /// Si se usó -s/--show-tags (listar todos los tags del archivo).
     pub fn show_tags(&self) -> bool {
         self.show_tags
+    }
+
+    /// Si se usó -t/--single-tag (mostrar solo un tag por archivo, sin cabecera).
+    pub fn single_tag(&self) -> bool {
+        self.single_tag
     }
 
     /// Si se usó -q/--query, devuelve la lista de keywords en orden; si no, None.

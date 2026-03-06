@@ -31,6 +31,14 @@ fn main() {
         return;
     }
 
+    if opts.single_tag() {
+        if let Err(e) = run_single_tag(&opts) {
+            eprintln!("{}", e);
+            exit(1);
+        }
+        return;
+    }
+
     let columns = match resolve_columns(&opts) {
         Ok(c) => c,
         Err(e) => {
@@ -60,6 +68,27 @@ fn main() {
     print_table(&columns, &rows);
 }
 
+/// Modo -t: muestra solo un tag por archivo (una línea por archivo, sin cabecera). Por defecto StudyInstanceUID; con -q un solo tag.
+fn run_single_tag(opts: &CliOptions) -> Result<(), String> {
+    let files = opts.files();
+    if files.is_empty() {
+        return Err("Uso con -t: dcmtk -t [opciones] <archivo.dcm> [archivo2.dcm ...]\nPor defecto se muestra StudyInstanceUID; use -q TAG para otro tag (solo uno).".into());
+    }
+    let column = QueryColumn::single_tag_column(opts.query_keywords().as_deref())
+        .map_err(|e| e.to_string())?;
+    let columns = [column];
+    for path in files {
+        if !path.exists() {
+            return Err(format!("Error: el archivo no existe: {}", path.display()));
+        }
+        let row = extract_row_from_path(path, &columns)
+            .map_err(|e| format!("Error al abrir el archivo DICOM: {}", e))?;
+        let value = row.first().map(String::as_str).unwrap_or("");
+        println!("{}", value);
+    }
+    Ok(())
+}
+
 /// Modo -s: muestra todos los tags del archivo. Solo se acepta un archivo.
 fn run_show_tags(opts: &CliOptions) -> Result<(), String> {
     let files = opts.files();
@@ -81,7 +110,7 @@ fn run_show_tags(opts: &CliOptions) -> Result<(), String> {
 /// Parsea argumentos con clap. Mantiene mensajes de uso coherentes con la especificación.
 fn parse_args() -> Result<CliOptions, String> {
     let opts = CliOptions::parse();
-    if opts.files.is_empty() && !opts.show_tags {
+    if opts.files.is_empty() && !opts.show_tags && !opts.single_tag {
         return Err("Uso: dcmtk <archivo.dcm> [archivo2.dcm ...]\nEjemplo: dcmtk myfile.dcm".into());
     }
     Ok(opts)

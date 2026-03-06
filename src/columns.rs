@@ -59,6 +59,18 @@ impl QueryColumn {
         ]
     }
 
+    /// Resuelve un único tag para el modo -t/--single-tag. Por defecto StudyInstanceUID; si se pasa un keyword (p. ej. desde -q), debe ser solo uno.
+    pub fn single_tag_column(keywords: Option<&[String]>) -> Result<QueryColumn, String> {
+        let kw = match keywords {
+            None => return Ok(column_from_tag(&StandardDataDictionary, tags::SOP_INSTANCE_UID)),
+            Some(k) if k.is_empty() => return Ok(column_from_tag(&StandardDataDictionary, tags::STUDY_INSTANCE_UID)),
+            Some(k) if k.len() == 1 => k[0].as_str(),
+            Some(_) => return Err("Con -t/--single-tag y -q solo se permite un tag.".into()),
+        };
+        let cols = Self::from_keywords(&[kw])?;
+        Ok(cols.into_iter().next().unwrap())
+    }
+
     /// Resuelve una lista de keywords (como en -q) a columnas usando el diccionario estándar.
     /// "Date" es una columna compuesta (StudyDate + StudyTime); el resto se buscan por keyword.
     pub fn from_keywords(keywords: &[&str]) -> Result<Vec<QueryColumn>, String> {

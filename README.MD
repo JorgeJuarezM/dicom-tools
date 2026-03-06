@@ -63,6 +63,67 @@ Implementation version name: dcm4che-5.23.2
 
 Las secuencias (SQ) se muestran con ítems indentados; el listado continúa hasta el final del dataset.
 
+### Un solo tag por archivo (`-t` / `--single-tag`)
+
+Con `-t` se muestra **solo el valor de un tag** por archivo: **una línea por archivo, sin cabecera**. Por defecto se usa **StudyInstanceUID**. Se puede combinar con `-q` para elegir otro tag; en ese caso **solo se permite un keyword** en `-q`.
+
+```bash
+dcmtk -t myfile.dcm
+dcmtk -t -q PatientName myfile.dcm
+dcmtk -t file1.dcm file2.dcm
+```
+
+Ejemplo de salida con `-t` (por defecto, SOPInstanceUID):
+
+```bash
+dcmtk -t myfile.dcm
+```
+
+```
+2.25.179733568928423661964122720616650769519
+```
+
+Ejemplo con `-t -q PatientName` (un archivo):
+
+```bash
+dcmtk -t -q PatientName myfile.dcm
+```
+
+```
+CAMBEROS ALMADA^MARIA INES^^^
+```
+
+Ejemplo con `-t` y varios archivos (una línea por archivo, mismo tag):
+
+```bash
+dcmtk -t myfile.dcm myfile.dcm
+```
+
+```
+2.25.179733568928423661964122720616650769519
+2.25.179733568928423661964122720616650769519
+```
+
+Si usas `-t` con `-q` y más de un tag (p. ej. `-q PatientName,AccessionNumber`), se muestra error: "Con -t/--single-tag y -q solo se permite un tag."
+
+**Uso con `xargs`:** al imprimir una línea por archivo (sin cabecera), la salida de `-t` se puede canalizar a `xargs` para concatenar cada valor con otro texto o usarlo como argumento de otro comando:
+
+```bash
+# Añadir un prefijo a cada UID
+dcmtk -t *.dcm | xargs -I {} echo "StudyUID: {}"
+
+# Añadir sufijo (p. ej. para etiquetar)
+dcmtk -t *.dcm | xargs -I {} echo "{} -- procesado"
+
+# Pasar cada UID a otro comando (ejemplo: imprimir con formato)
+dcmtk -t file1.dcm file2.dcm | xargs -I {} printf "UID=%s\n" "{}"
+
+# Con otro tag (-q): cada Patient Name con un prefijo
+dcmtk -t -q PatientName *.dcm | xargs -I {} echo "Paciente: {}"
+```
+
+Con `-I {}` cada línea de la salida de `dcmtk -t` sustituye a `{}` en el comando que sigue; así puedes combinar el valor del tag con el texto que quieras.
+
 ## Uso básico
 
 ### Obtener información de archivos DICOM
@@ -131,3 +192,4 @@ Ejemplo sin `-q` (columnas por defecto):
 - **Archivo no DICOM o corrupto:** mensaje `Error al abrir el archivo DICOM: <detalle>` y salida 1.
 - **Keyword desconocido en `-q`:** mensaje `Columna desconocida: <keyword>` y salida 1.
 - **Con `-s`:** sin archivo → "Uso con -s: dcmtk -s <archivo.dcm>". Más de un archivo → "Con -s/--show-tags solo se acepta un archivo.". Salida 1.
+- **Con `-t`:** sin archivos → mensaje de uso con -t. Con `-q` y más de un tag → "Con -t/--single-tag y -q solo se permite un tag.". Salida 1.

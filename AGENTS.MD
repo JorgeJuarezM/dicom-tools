@@ -24,7 +24,7 @@ A continuación se describe el comportamiento que el programa debe tener para qu
 
 ### Interfaz de línea de comandos
 
-- **Argumentos:** opción `-q/--query` opcional; opción `-s` / `--show-tags` opcional; uno o más argumentos posicionales (rutas de archivos DICOM). Se procesan en el orden indicado.
+- **Argumentos:** opciones `-q/--query`, `-s/--show-tags` y `-t/--single-tag` opcionales; uno o más argumentos posicionales (rutas de archivos DICOM). Se procesan en el orden indicado.
 - **Opción `-s` / `--show-tags`:** muestra todos los tags contenidos en el archivo DICOM (meta + dataset). En este modo **solo se acepta un archivo**. Si no se pasa archivo: mensaje "Uso con -s: dcmtk -s <archivo.dcm>" y "Con -s solo se acepta un archivo.", exit 1. Si se pasan dos o más archivos: "Con -s/--show-tags solo se acepta un archivo.", exit 1. La salida se hace con `dicom::dump::dump_file(&obj)` (formato legible con tag, nombre, VR, tamaño y valor).
 - **Ayuda:** la opción `-h` / `--help` (proporcionada por clap) debe mostrar el uso estándar y, a continuación, una lista de **tags DICOM comunes** utilizables con `-q`, agrupados por categoría (Paciente, Estudio, Serie, Instancia/Imagen) y el keyword especial `Date`, más ejemplos de uso (incluido `-s`).
 - **Sin argumentos:** imprimir en stderr exactamente:
@@ -102,15 +102,30 @@ A continuación se describe el comportamiento que el programa debe tener para qu
   - `dcmtk -s` (sin archivo) → error de uso.
   - `dcmtk -s a.dcm b.dcm` → error "solo se acepta un archivo".
 
+#### `-t` / `--single-tag`
+
+- **Propósito:** mostrar solo el valor de **un** tag por archivo: una línea por archivo, **sin cabecera** de columna.
+- **Sintaxis:** `-t [opciones] <archivo.dcm> [archivo2.dcm ...]`. Se aceptan uno o más archivos.
+- **Tag por defecto:** StudyInstanceUID. Si se combina con `-q`, el tag es el indicado en `-q`; en ese caso **solo se permite un keyword** en `-q` (si hay más de uno, error "Con -t/--single-tag y -q solo se permite un tag.", exit 1).
+- **Salida:** una línea por archivo con únicamente el valor del tag elegido (sin título de columna).
+- **Errores:** sin archivos → mensaje "Uso con -t: dcmtk -t [opciones] <archivo.dcm> ..." y "Por defecto se muestra StudyInstanceUID; use -q TAG para otro tag (solo uno).", exit 1. Con `-q` y más de un keyword → "Con -t/--single-tag y -q solo se permite un tag.", exit 1.
+- **Ejemplos de uso:**
+  - `dcmtk -t myfile.dcm` → una línea con el StudyInstanceUID del archivo.
+  - `dcmtk -t -q PatientName myfile.dcm` → una línea con el Patient Name.
+  - `dcmtk -t myfile.dcm otro.dcm` → dos líneas (una por archivo, valor del StudyInstanceUID).
+  - `dcmtk -t -q PatientName,AccessionNumber myfile.dcm` → error "solo se permite un tag".
+- **Uso con xargs:** la salida (una línea por archivo, sin cabecera) se puede canalizar a `xargs` para concatenar cada valor con texto o pasarlo a otro comando; por ejemplo: `dcmtk -t *.dcm | xargs -I {} echo "StudyUID: {}"` (cada línea sustituye `{}`). Ver README para más ejemplos.
+
 ### Resumen de comportamiento esperado
 
-1. Parsear argumentos (p. ej. con `clap`): opciones `-q/--query` y `-s/--show-tags` opcionales, uno o más archivos posicionales. Si no hay `-s` y no hay archivos, imprimir en stderr "Uso: dcmtk <archivo.dcm> [archivo2.dcm ...]" y "Ejemplo: dcmtk myfile.dcm", y exit 1.
+1. Parsear argumentos (p. ej. con `clap`): opciones `-q/--query`, `-s/--show-tags` y `-t/--single-tag` opcionales, uno o más archivos posicionales. Si no hay `-s`, `-t` ni archivos, imprimir en stderr "Uso: dcmtk <archivo.dcm> [archivo2.dcm ...]" y "Ejemplo: dcmtk myfile.dcm", y exit 1.
 2. **Si hay `-s`:** validar que se haya pasado exactamente un archivo; si no hay archivo o hay más de uno, mensaje en stderr y exit 1. Abrir el archivo, llamar `dicom::dump::dump_file(&obj)` y terminar.
-3. Si hay `-q`, resolver la lista de keywords a columnas con el diccionario estándar DICOM (`by_name`); si algún keyword no existe en el diccionario, mensaje "Columna desconocida: <keyword>" y exit 1. Si no hay `-q`, usar columnas por defecto (AccessionNumber, PatientName, Modality, Date).
-4. Validar que todos los paths existan; si alguno no existe, mensaje en stderr y exit 1.
-5. Abrir cada archivo DICOM con la API del crate `dicom` en orden; si alguno falla, mensaje en stderr y exit 1.
-6. Para cada archivo: extraer los valores de las columnas elegidas (tags con `attr_opt` o campo compuesto Date); truncar cada valor al ancho de su columna (por caracteres, UTF-8 safe).
-7. Imprimir una línea de cabecera (títulos truncados al ancho de columna) y luego una línea por archivo (prefijo `  `, columnas separadas por espacios, anchos fijos).
+3. **Si hay `-t`:** validar que haya al menos un archivo; si se usó `-q`, validar que `-q` tenga exactamente un keyword (si no, error y exit 1). Resolver el tag único (por defecto StudyInstanceUID, o el de `-q`). Para cada archivo, extraer ese tag e imprimir solo su valor (una línea por archivo, sin cabecera); terminar.
+4. Si hay `-q`, resolver la lista de keywords a columnas con el diccionario estándar DICOM (`by_name`); si algún keyword no existe en el diccionario, mensaje "Columna desconocida: <keyword>" y exit 1. Si no hay `-q`, usar columnas por defecto (AccessionNumber, PatientName, Modality, Date).
+5. Validar que todos los paths existan; si alguno no existe, mensaje en stderr y exit 1.
+6. Abrir cada archivo DICOM con la API del crate `dicom` en orden; si alguno falla, mensaje en stderr y exit 1.
+7. Para cada archivo: extraer los valores de las columnas elegidas (tags con `attr_opt` o campo compuesto Date); truncar cada valor al ancho de su columna (por caracteres, UTF-8 safe).
+8. Imprimir una línea de cabecera (títulos truncados al ancho de columna) y luego una línea por archivo (prefijo `  `, columnas separadas por espacios, anchos fijos).
 
 ### Arquitectura del código (escalable y reutilizable)
 
