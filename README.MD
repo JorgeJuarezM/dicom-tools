@@ -14,6 +14,18 @@ cargo build --release
 
 El ejecutable se genera como `dcmtk` en `target/release/dcmtk`.
 
+## Ayuda
+
+Para ver el uso y la lista de tags DICOM comunes utilizables con `-q`:
+
+```bash
+dcmtk --help
+# o
+dcmtk -h
+```
+
+La ayuda muestra las opciones y, al final, una lista de tags comunes agrupados por categoría (Paciente, Estudio, Serie, Instancia/Imagen) y el keyword especial `Date`.
+
 ## Uso básico
 
 ### Obtener información de archivos DICOM

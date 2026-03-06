@@ -24,6 +24,7 @@ A continuación se describe el comportamiento que el programa debe tener para qu
 ### Interfaz de línea de comandos
 
 - **Argumentos:** opción `-q/--query` opcional; uno o más argumentos posicionales (rutas de archivos DICOM). Se procesan en el orden indicado.
+- **Ayuda:** la opción `-h` / `--help` (proporcionada por clap) debe mostrar el uso estándar y, a continuación, una lista de **tags DICOM comunes** utilizables con `-q`, agrupados por categoría (Paciente, Estudio, Serie, Instancia/Imagen) y el keyword especial `Date`, más ejemplos de uso.
 - **Sin argumentos:** imprimir en stderr exactamente:
   - `Uso: dcmtk <archivo.dcm> [archivo2.dcm ...]`
   - `Ejemplo: dcmtk myfile.dcm`

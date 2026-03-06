@@ -3,10 +3,42 @@
 use clap::Parser;
 use std::path::PathBuf;
 
+/// Texto que se muestra tras la ayuda estándar (lista de tags DICOM comunes).
+const AFTER_HELP: &str = r#"DICOM TAGS COMUNES (utilizables con -q, case-sensitive):
+
+  Paciente:
+    PatientName, PatientID, PatientBirthDate, PatientSex, PatientAge
+    PatientWeight, PatientSize, ReferringPhysicianName
+
+  Estudio:
+    StudyDate, StudyTime, StudyID, StudyInstanceUID, StudyDescription
+    AccessionNumber, RequestedProcedureID, RequestedProcedureDescription
+
+  Serie:
+    Modality, SeriesNumber, SeriesDescription, SeriesInstanceUID
+    SeriesDate, SeriesTime, ProtocolName, BodyPartExamined
+
+  Instancia / Imagen:
+    SOPInstanceUID, InstanceNumber, ImageType, Rows, Columns
+    NumberOfFrames, PhotometricInterpretation, BitsAllocated, BitsStored
+
+  Columna compuesta (keyword especial):
+    Date   (equivale a StudyDate + StudyTime formateados como YYYY.MM.DD HH:MM:SS)
+
+  Ejemplos:
+    dcmtk myfile.dcm
+    dcmtk -q PatientName,AccessionNumber,StudyID myfile.dcm
+    dcmtk -q Modality,SeriesDescription,SOPInstanceUID file1.dcm file2.dcm
+"#;
+
 /// Opciones de la aplicación: modificadores y argumentos posicionales.
 /// Diseñado para extenderse con nuevos modificadores sin cambiar la firma.
 #[derive(Debug, Parser)]
-#[command(name = "dcmtk", about = "Herramientas para archivos DICOM")]
+#[command(
+    name = "dcmtk",
+    about = "Herramientas para archivos DICOM",
+    after_help = AFTER_HELP
+)]
 pub struct CliOptions {
     /// Columnas a mostrar (keywords DICOM separados por coma). Si no se especifica, se usan las columnas por defecto.
     #[arg(short = 'q', long = "query", value_name = "COLUMNAS")]
