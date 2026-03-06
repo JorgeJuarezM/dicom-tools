@@ -9,6 +9,21 @@ use dicom::object::DicomObject as _;
 use std::env;
 use std::path::Path;
 
+/// Anchos de columna: mínimo = longitud del título, máximo = valor usado para truncar datos.
+const W_ACCESSION: usize = 20;  // título "Accession Number" = 17
+const W_NAME: usize = 28;       // título "Patient Name" = 12
+const W_MODALITY: usize = 10;   // título "Modality" = 8
+const W_DATE: usize = 22;      // título "Date" = 4, formato "YYYY.MM.DD HH:MM:SS"
+
+/// Trunca `s` a `max_chars` caracteres (respeta UTF-8).
+fn truncate_to_width(s: &str, max_chars: usize) -> String {
+    if s.chars().count() <= max_chars {
+        s.to_string()
+    } else {
+        s.chars().take(max_chars).collect()
+    }
+}
+
 /// Formatea fecha DICOM (YYYYMMDD) y hora (HHMMSS o HHMMSS.frac) al formato mostrado en README.
 fn format_datetime(date_str: &str, time_str: &str) -> String {
     let date = date_str.trim();
@@ -99,23 +114,21 @@ fn main() {
         format_datetime(&study_date, &study_time)
     };
 
-    // Anchos de columna para alinear con el ejemplo del README
-    const W_ACCESSION: usize = 12;
-    const W_NAME: usize = 24;
-    const W_MODALITY: usize = 10;
+    // Títulos y datos truncados al ancho máximo de cada columna
+    let h_acc = truncate_to_width("Accession Number", W_ACCESSION);
+    let h_name = truncate_to_width("Patient Name", W_NAME);
+    let h_mod = truncate_to_width("Modality", W_MODALITY);
+    let h_date = truncate_to_width("Date", W_DATE);
 
     println!(
-        "  {:<W_ACCESSION$}  {:<W_NAME$}  {:<W_MODALITY$}  {}",
-        "Accession Number",
-        "Patient Name",
-        "Modality",
-        "Date"
+        "  {:<W_ACCESSION$}  {:<W_NAME$}  {:<W_MODALITY$}  {:<W_DATE$}",
+        h_acc, h_name, h_mod, h_date
     );
     println!(
-        "  {:<W_ACCESSION$}  {:<W_NAME$}  {:<W_MODALITY$}  {}",
-        accession,
-        patient_name,
-        modality,
-        date_display
+        "  {:<W_ACCESSION$}  {:<W_NAME$}  {:<W_MODALITY$}  {:<W_DATE$}",
+        truncate_to_width(&accession, W_ACCESSION),
+        truncate_to_width(&patient_name, W_NAME),
+        truncate_to_width(&modality, W_MODALITY),
+        truncate_to_width(&date_display, W_DATE)
     );
 }
