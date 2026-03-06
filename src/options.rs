@@ -34,6 +34,10 @@ const AFTER_HELP: &str = r#"DICOM TAGS COMUNES (utilizables con -q, case-sensiti
     Por defecto usa SOPInstanceUID. Con -q se usa el tag indicado (solo uno).
     Uso con xargs: dcmtk -t *.dcm | xargs -I {} echo "UID: {}"
 
+  Opción -d/--diff:
+    Compara dos archivos DICOM a nivel de tags (se omite PixelData). Salida en formato diff.
+    Ejemplo: dcmtk --diff file1.dcm file2.dcm
+
   Ejemplos:
     dcmtk myfile.dcm
     dcmtk -q PatientName,AccessionNumber,StudyID myfile.dcm
@@ -58,6 +62,10 @@ pub struct CliOptions {
     #[arg(short = 't', long = "single-tag")]
     pub single_tag: bool,
 
+    /// Compara dos archivos DICOM a nivel de tags (se omite PixelData). Salida en formato diff. Requiere exactamente 2 archivos.
+    #[arg(short = 'd', long = "diff")]
+    pub diff: bool,
+
     /// Columnas a mostrar (keywords DICOM separados por coma). Si no se especifica, se usan las columnas por defecto.
     #[arg(short = 'q', long = "query", value_name = "COLUMNAS")]
     pub query: Option<String>,
@@ -81,6 +89,11 @@ impl CliOptions {
     /// Si se usó -t/--single-tag (mostrar solo un tag por archivo, sin cabecera).
     pub fn single_tag(&self) -> bool {
         self.single_tag
+    }
+
+    /// Si se usó -d/--diff (comparar dos archivos DICOM).
+    pub fn diff(&self) -> bool {
+        self.diff
     }
 
     /// Si se usó -q/--query, devuelve la lista de keywords en orden; si no, None.

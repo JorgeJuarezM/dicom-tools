@@ -85,6 +85,44 @@ Implementation version name: dcm4che-5.23.2
 
 Las secuencias (SQ) se muestran con ítems indentados; el listado continúa hasta el final del dataset.
 
+### Comparar dos archivos DICOM (`-d` / `--diff`)
+
+Con `-d` o `--diff` se comparan **dos archivos DICOM** a nivel de tags (metadatos). Se **omite el tag PixelData** (7FE0,0010) y la salida se imprime en **formato diff** (estilo unificado: `---` / `+++` y líneas `-` / `+` para diferencias).
+
+Se requieren **exactamente 2 archivos**:
+
+```bash
+dcmtk --diff file1.dcm file2.dcm
+# o
+dcmtk -d a.dcm b.dcm
+```
+
+**Salida:** primera línea `--- <ruta_archivo1>`, segunda `+++ <ruta_archivo2>`. A continuación, solo se listan las diferencias: tags que solo están en el primer archivo (prefijo `-`), tags que solo están en el segundo (prefijo `+`) y tags presentes en ambos con valor distinto (una línea `-` con el valor del primero y una línea `+` con el valor del segundo). Los tags con el mismo valor en ambos archivos no se muestran.
+
+Ejemplo (mismo archivo dos veces, sin diferencias):
+
+```bash
+dcmtk --diff myfile.dcm myfile.dcm
+```
+
+```
+--- myfile.dcm
++++ myfile.dcm
+```
+
+Ejemplo con archivos distintos (salida típica cuando hay diferencias):
+
+```
+--- a.dcm
++++ b.dcm
+- (0008,0050) AccessionNumber: ACC-001
++ (0008,0050) AccessionNumber: ACC-002
+- (0010,0010) PatientName: Doe^John
++ (0010,0010) PatientName: Smith^Jane
+```
+
+Si se pasa un solo archivo o más de dos, se muestra error: "Uso con -d/--diff: dcmtk --diff <archivo1.dcm> <archivo2.dcm>" y "Se requieren exactamente 2 archivos."
+
 ### Un solo tag por archivo (`-t` / `--single-tag`)
 
 Con `-t` se muestra **solo el valor de un tag** por archivo: **una línea por archivo, sin cabecera**. Por defecto se usa **StudyInstanceUID**. Se puede combinar con `-q` para elegir otro tag; en ese caso **solo se permite un keyword** en `-q`.
@@ -215,3 +253,4 @@ Ejemplo sin `-q` (columnas por defecto):
 - **Keyword desconocido en `-q`:** mensaje `Columna desconocida: <keyword>` y salida 1.
 - **Con `-s`:** sin archivo → "Uso con -s: dcmtk -s <archivo.dcm>". Más de un archivo → "Con -s/--show-tags solo se acepta un archivo.". Salida 1.
 - **Con `-t`:** sin archivos → mensaje de uso con -t. Con `-q` y más de un tag → "Con -t/--single-tag y -q solo se permite un tag.". Salida 1.
+- **Con `-d`/`--diff`:** sin archivos, un solo archivo o más de dos → "Uso con -d/--diff: dcmtk --diff <archivo1.dcm> <archivo2.dcm>" y "Se requieren exactamente 2 archivos.". Salida 1.

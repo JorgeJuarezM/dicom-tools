@@ -24,7 +24,7 @@ A continuación se describe el comportamiento que el programa debe tener para qu
 
 ### Interfaz de línea de comandos
 
-- **Argumentos:** opciones `-q/--query`, `-s/--show-tags` y `-t/--single-tag` opcionales; uno o más argumentos posicionales (rutas de archivos DICOM). Se procesan en el orden indicado.
+- **Argumentos:** opciones `-q/--query`, `-s/--show-tags`, `-t/--single-tag` y `-d/--diff` opcionales; uno o más argumentos posicionales (rutas de archivos DICOM). Se procesan en el orden indicado.
 - **Opción `-s` / `--show-tags`:** muestra todos los tags contenidos en el archivo DICOM (meta + dataset). En este modo **solo se acepta un archivo**. Si no se pasa archivo: mensaje "Uso con -s: dcmtk -s <archivo.dcm>" y "Con -s solo se acepta un archivo.", exit 1. Si se pasan dos o más archivos: "Con -s/--show-tags solo se acepta un archivo.", exit 1. La salida se hace con `dicom::dump::dump_file(&obj)` (formato legible con tag, nombre, VR, tamaño y valor).
 - **Ayuda:** la opción `-h` / `--help` (proporcionada por clap) debe mostrar el uso estándar y, a continuación, una lista de **tags DICOM comunes** utilizables con `-q`, agrupados por categoría (Paciente, Estudio, Serie, Instancia/Imagen) y el keyword especial `Date`, más ejemplos de uso (incluido `-s`).
 - **Sin argumentos:** imprimir en stderr exactamente:
@@ -116,22 +116,41 @@ A continuación se describe el comportamiento que el programa debe tener para qu
   - `dcmtk -t -q PatientName,AccessionNumber myfile.dcm` → error "solo se permite un tag".
 - **Uso con xargs:** la salida (una línea por archivo, sin cabecera) se puede canalizar a `xargs` para concatenar cada valor con texto o pasarlo a otro comando; por ejemplo: `dcmtk -t *.dcm | xargs -I {} echo "StudyUID: {}"` (cada línea sustituye `{}`). Ver README para más ejemplos.
 
+#### `-d` / `--diff`
+
+- **Propósito:** comparar dos archivos DICOM a nivel de tags (metadatos). Se omite el tag **PixelData** (7FE0,0010). La salida se imprime en formato diff (estilo unificado).
+- **Sintaxis:** `-d <archivo1.dcm> <archivo2.dcm>` o `--diff <archivo1.dcm> <archivo2.dcm>`. Se requieren **exactamente 2** archivos.
+- **Comportamiento:** se abren ambos archivos con `open_file`; se recorre el dataset de cada uno (iteración sobre los elementos), se omite el elemento con tag PixelData; cada tag se asocia a un valor representado como string (si el valor no es convertible a string, se usa `<...>`). Se comparan los dos conjuntos tag→valor y se imprime:
+  - Primera línea: `--- <ruta_archivo1>`
+  - Segunda línea: `+++ <ruta_archivo2>`
+  - Para cada tag solo en el primer archivo: línea con prefijo `- ` y `(gggg,eeee) nombre: valor`.
+  - Para cada tag solo en el segundo archivo: línea con prefijo `+ ` y `(gggg,eeee) nombre: valor`.
+  - Para cada tag en ambos con valor distinto: una línea `- (gggg,eeee) nombre: valor1` y una línea `+ (gggg,eeee) nombre: valor2`.
+  - Los tags presentes en ambos con el mismo valor no se listan (o a criterio: no imprimir líneas para no inflar la salida).
+- **Nombre del tag:** se obtiene del diccionario estándar DICOM (`StandardDataDictionary::by_tag`); si no existe, se usa el formato `(gggg,eeee)`.
+- **Errores:** sin archivos o con un solo archivo o con más de dos archivos → mensaje "Uso con -d/--diff: dcmtk --diff <archivo1.dcm> <archivo2.dcm>" y "Se requieren exactamente 2 archivos.", exit 1. Archivo inexistente o no DICOM → mensaje en stderr y exit 1.
+- **Ejemplos de uso:**
+  - `dcmtk --diff a.dcm b.dcm` → diff de tags entre `a.dcm` y `b.dcm` (sin PixelData).
+  - `dcmtk -d file1.dcm file2.dcm` → igual.
+
 ### Resumen de comportamiento esperado
 
-1. Parsear argumentos (p. ej. con `clap`): opciones `-q/--query`, `-s/--show-tags` y `-t/--single-tag` opcionales, uno o más archivos posicionales. Si no hay `-s`, `-t` ni archivos, imprimir en stderr "Uso: dcmtk <archivo.dcm> [archivo2.dcm ...]" y "Ejemplo: dcmtk myfile.dcm", y exit 1.
+1. Parsear argumentos (p. ej. con `clap`): opciones `-q/--query`, `-s/--show-tags`, `-t/--single-tag` y `-d/--diff` opcionales, uno o más archivos posicionales. Si no hay `-s`, `-t`, `-d` ni archivos, imprimir en stderr "Uso: dcmtk <archivo.dcm> [archivo2.dcm ...]" y "Ejemplo: dcmtk myfile.dcm", y exit 1.
 2. **Si hay `-s`:** validar que se haya pasado exactamente un archivo; si no hay archivo o hay más de uno, mensaje en stderr y exit 1. Abrir el archivo, llamar `dicom::dump::dump_file(&obj)` y terminar.
-3. **Si hay `-t`:** validar que haya al menos un archivo; si se usó `-q`, validar que `-q` tenga exactamente un keyword (si no, error y exit 1). Resolver el tag único (por defecto StudyInstanceUID, o el de `-q`). Para cada archivo, extraer ese tag e imprimir solo su valor (una línea por archivo, sin cabecera); terminar.
-4. Si hay `-q`, resolver la lista de keywords a columnas con el diccionario estándar DICOM (`by_name`); si algún keyword no existe en el diccionario, mensaje "Columna desconocida: <keyword>" y exit 1. Si no hay `-q`, usar columnas por defecto (AccessionNumber, PatientName, Modality, Date).
-5. Validar que todos los paths existan; si alguno no existe, mensaje en stderr y exit 1.
-6. Abrir cada archivo DICOM con la API del crate `dicom` en orden; si alguno falla, mensaje en stderr y exit 1.
-7. Para cada archivo: extraer los valores de las columnas elegidas (tags con `attr_opt` o campo compuesto Date); truncar cada valor al ancho de su columna (por caracteres, UTF-8 safe).
-8. Imprimir una línea de cabecera (títulos truncados al ancho de columna) y luego una línea por archivo (prefijo `  `, columnas separadas por espacios, anchos fijos).
+3. **Si hay `-d`:** validar que se hayan pasado exactamente 2 archivos; si no, mensaje "Uso con -d/--diff: dcmtk --diff <archivo1.dcm> <archivo2.dcm>" y "Se requieren exactamente 2 archivos.", exit 1. Abrir ambos archivos, recolectar tag→valor (omitir PixelData), comparar e imprimir en formato diff; terminar.
+4. **Si hay `-t`:** validar que haya al menos un archivo; si se usó `-q`, validar que `-q` tenga exactamente un keyword (si no, error y exit 1). Resolver el tag único (por defecto StudyInstanceUID, o el de `-q`). Para cada archivo, extraer ese tag e imprimir solo su valor (una línea por archivo, sin cabecera); terminar.
+5. Si hay `-q`, resolver la lista de keywords a columnas con el diccionario estándar DICOM (`by_name`); si algún keyword no existe en el diccionario, mensaje "Columna desconocida: <keyword>" y exit 1. Si no hay `-q`, usar columnas por defecto (AccessionNumber, PatientName, Modality, Date).
+6. Validar que todos los paths existan; si alguno no existe, mensaje en stderr y exit 1.
+7. Abrir cada archivo DICOM con la API del crate `dicom` en orden; si alguno falla, mensaje en stderr y exit 1.
+8. Para cada archivo: extraer los valores de las columnas elegidas (tags con `attr_opt` o campo compuesto Date); truncar cada valor al ancho de su columna (por caracteres, UTF-8 safe).
+9. Imprimir una línea de cabecera (títulos truncados al ancho de columna) y luego una línea por archivo (prefijo `  `, columnas separadas por espacios, anchos fijos).
 
 ### Arquitectura del código (escalable y reutilizable)
 
 - **Opciones CLI:** el módulo `options` define `CliOptions` (p. ej. con `clap::Parser`). Las opciones se tratan de forma abstracta: nuevos modificadores se añaden como campos y se resuelven en un solo lugar.
 - **Columnas:** el módulo `columns` define la estructura `QueryColumn` (cabecera, ancho, y un `QueryColumnKind`: tag DICOM o columna compuesta "Date"). Las columnas se resuelven desde keywords con el diccionario estándar (`StandardDataDictionary::by_name`); el nombre para la cabecera se obtiene del alias del tag (p. ej. "PatientName" → "Patient Name"). Ancho = max(10, longitud del nombre). La extracción se hace por `attr_opt(tag)` o, para Date, combinando StudyDate y StudyTime.
 - **Tabla:** `print_table(columns, rows)` y `extract_row_from_path(path, columns)` son genéricos respecto a la lista de columnas; el formato y el truncado usan la cabecera y el ancho de cada `QueryColumn`.
-- **Flujo en `main`:** parsear opciones → resolver columnas (por defecto o desde `-q`) → validar paths → extraer una fila por archivo → imprimir tabla. Errores unificados: mensaje en stderr y exit 1.
+- **Diff:** el módulo `diff` implementa la comparación de dos archivos DICOM: recorre el dataset de cada uno (omitiendo PixelData), asocia cada tag a un valor string y genera salida en formato diff (unificado: `---`/`+++` y líneas `-`/`+` para diferencias).
+- **Flujo en `main`:** parsear opciones → si `-s` ejecutar run_show_tags; si `-d` ejecutar run_diff (exactamente 2 archivos); si `-t` ejecutar run_single_tag; si no, resolver columnas (por defecto o desde `-q`) → validar paths → extraer una fila por archivo → imprimir tabla. Errores unificados: mensaje en stderr y exit 1.
 
 Cualquier cambio de comportamiento debe reflejarse aquí y en `README.MD` para mantener la coherencia entre especificación, código y documentación de usuario.
