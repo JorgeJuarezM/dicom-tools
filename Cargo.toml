@@ -1,6 +1,11 @@
 [package]
 name = "dcm-toolkit"
 version = "0.1.0"
-edition = "2024"
+edition = "2021"
+
+[[bin]]
+name = "dcmtk"
+path = "src/main.rs"
 
 [dependencies]
+dicom = "0.9"
