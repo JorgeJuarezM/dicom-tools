@@ -25,6 +25,16 @@ dcmtk file1.dcm file2.dcm file3.dcm
 
 Puedes pasar uno o más archivos. Se procesan en el orden indicado.
 
+### Elegir columnas con `-q` / `--query`
+
+Puedes indicar qué columnas mostrar y en qué orden con la opción `-q` (keywords DICOM separados por coma):
+
+```bash
+dcmtk -q PatientName,AccessionNumber,StudyId myfile.dcm
+```
+
+**Keywords admitidos:** `AccessionNumber`, `PatientName`, `Modality`, `Date`, `StudyId`. Si no usas `-q`, se muestran por defecto: Accession Number, Patient Name, Modality, Date.
+
 **Salida:** una tabla con una línea de cabecera y una fila por archivo:
 
 | Columna           | Origen DICOM        | Ancho (caracteres) |
@@ -33,6 +43,7 @@ Puedes pasar uno o más archivos. Se procesan en el orden indicado.
 | Patient Name      | (0010,0010)         | 28                 |
 | Modality          | (0008,0060)         | 10                 |
 | Date              | (0008,0020) + (0008,0030) | 22          |
+| Study ID          | (0020,0010)               | 40          |
 
 - La primera línea son los títulos de columna; las siguientes son una fila por cada archivo.
 - Cada columna tiene un ancho fijo. Si un valor (o el título) es más largo, se recorta a ese ancho (por caracteres, respetando UTF-8), sin puntos suspensivos.
@@ -51,3 +62,4 @@ Ejemplo:
 - **Sin argumentos:** se imprime en stderr el mensaje de uso y se sale con código 1.
 - **Archivo inexistente:** mensaje `Error: el archivo no existe: <ruta>` y salida 1. Con varios archivos, se comprueba que todos existan antes de abrir ninguno.
 - **Archivo no DICOM o corrupto:** mensaje `Error al abrir el archivo DICOM: <detalle>` y salida 1.
+- **Keyword desconocido en `-q`:** mensaje `Columna desconocida: <keyword>` y salida 1.

@@ -9,3 +9,4 @@ path = "src/main.rs"
 
 [dependencies]
 dicom = "0.9"
+clap = { version = "4", features = ["derive"] }

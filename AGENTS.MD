@@ -23,7 +23,7 @@ A continuación se describe el comportamiento que el programa debe tener para qu
 
 ### Interfaz de línea de comandos
 
-- **Argumentos:** uno o más argumentos posicionales; cada uno es la ruta de un archivo DICOM. Se procesan en el orden indicado.
+- **Argumentos:** opción `-q/--query` opcional; uno o más argumentos posicionales (rutas de archivos DICOM). Se procesan en el orden indicado.
 - **Sin argumentos:** imprimir en stderr exactamente:
   - `Uso: dcmtk <archivo.dcm> [archivo2.dcm ...]`
   - `Ejemplo: dcmtk myfile.dcm`
@@ -41,6 +41,7 @@ A continuación se describe el comportamiento que el programa debe tener para qu
 | MODALITY                | (0008,0060)            | Columna "Modality"         |
 | STUDY_DATE              | (0008,0020)            | Parte fecha de "Date"      |
 | STUDY_TIME              | (0008,0030)            | Parte hora de "Date"       |
+| STUDY_ID                | (0020,0010)            | Columna "Study ID"         |
 
 - Lectura con `attr_opt(tag)`; si el elemento no está presente, tratar el valor como vacío (no fallar).
 
@@ -56,6 +57,7 @@ A continuación se describe el comportamiento que el programa debe tener para qu
   | Patient Name        | 28    |
   | Modality            | 10    |
   | Date                | 22    |
+  | Study ID            | 40    |
 
 - **Alineación:** todas las celdas alineadas a la izquierda dentro de su ancho.
 - **Truncado:** si el texto (título o valor) supera el ancho de la columna, se trunca a exactamente ese número de **caracteres** (no bytes), de forma segura para UTF-8. No se añade "..." ni otro sufijo.
@@ -69,12 +71,28 @@ A continuación se describe el comportamiento que el programa debe tener para qu
   - Hora = 2 primeros de Study Time, minutos = 2 siguientes, segundos = 2 siguientes (si Study Time tiene menos de 6 caracteres, usar "00" para segundos).
 - Si tanto Study Date como Study Time están ausentes o vacíos, la celda "Date" se deja vacía (no imprimir un placeholder).
 
+
+### Modificadores
+
+- **`-q` / `--query`:** lista de columnas a mostrar (keywords DICOM separados por coma). Si no se especifica, se usan las columnas por defecto (Accession Number, Patient Name, Modality, Date).
+- **Keywords admitidos (case-sensitive):** `AccessionNumber`, `PatientName`, `Modality`, `Date`, `StudyId`.
+- **Ejemplo:** `dcmtk -q PatientName,AccessionNumber,StudyId myfile.dcm`  
+  Salida: una línea de cabecera con "Patient Name", "Accession Number", "Study ID", y una fila por archivo con los valores (mismo formato de anchos y truncado). Si un keyword es desconocido, se imprime en stderr "Columna desconocida: <keyword>" y se sale con 1.
+
 ### Resumen de comportamiento esperado
 
-1. Validar que haya al menos un argumento; si no, mensaje de uso en stderr y exit 1.
-2. Validar que todos los paths existan; si alguno no existe, mensaje en stderr y exit 1.
-3. Abrir cada archivo DICOM con la API del crate `dicom` en orden; si alguno falla, mensaje en stderr y exit 1.
-4. Para cada archivo: obtener los cinco tags con `attr_opt`, normalizando a string vacío si faltan; construir la cadena de fecha según la regla anterior; truncar cada valor al ancho de su columna (por caracteres, UTF-8 safe).
-5. Imprimir una línea de cabecera (títulos truncados al ancho de columna) y luego una línea por archivo con el formato indicado (prefijo `  `, columnas separadas por espacios, anchos fijos).
+1. Parsear argumentos (p. ej. con `clap`): opción `-q/--query` opcional, uno o más archivos posicionales. Validar que haya al menos un archivo; si no, imprimir en stderr "Uso: dcmtk <archivo.dcm> [archivo2.dcm ...]" y "Ejemplo: dcmtk myfile.dcm", y exit 1.
+2. Si hay `-q`, resolver la lista de keywords a columnas (`QueryColumn`); si algún keyword es desconocido, mensaje "Columna desconocida: <keyword>" y exit 1. Si no hay `-q`, usar columnas por defecto.
+3. Validar que todos los paths existan; si alguno no existe, mensaje en stderr y exit 1.
+4. Abrir cada archivo DICOM con la API del crate `dicom` en orden; si alguno falla, mensaje en stderr y exit 1.
+5. Para cada archivo: extraer los valores de las columnas elegidas (tags con `attr_opt` o campo compuesto Date); truncar cada valor al ancho de su columna (por caracteres, UTF-8 safe).
+6. Imprimir una línea de cabecera (títulos truncados al ancho de columna) y luego una línea por archivo (prefijo `  `, columnas separadas por espacios, anchos fijos).
+
+### Arquitectura del código (escalable y reutilizable)
+
+- **Opciones CLI:** el módulo `options` define `CliOptions` (p. ej. con `clap::Parser`). Las opciones se tratan de forma abstracta: nuevos modificadores se añaden como campos y se resuelven en un solo lugar.
+- **Columnas:** el módulo `columns` define el enum `QueryColumn` (una variante por columna consultable). Cada variante conoce su keyword, cabecera, ancho y cómo extraer el valor del objeto DICOM (`extract`). Añadir una columna nueva implica una nueva variante y su implementación en `from_keyword` y `extract`. La extracción de atributos opcionales se centraliza (p. ej. `get_str_attr`) para no repetir el manejo de `attr_opt`/vacío.
+- **Tabla:** `print_table(columns, rows)` y `extract_row_from_path(path, columns)` son genéricos respecto a la lista de columnas; el formato y el truncado se derivan de `QueryColumn` (cabecera, ancho).
+- **Flujo en `main`:** parsear opciones → resolver columnas (por defecto o desde `-q`) → validar paths → extraer una fila por archivo → imprimir tabla. Errores unificados: mensaje en stderr y exit 1.
 
 Cualquier cambio de comportamiento debe reflejarse aquí y en `README.MD` para mantener la coherencia entre especificación, código y documentación de usuario.
