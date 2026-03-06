@@ -1,6 +1,6 @@
 //! DCM Tool Kit - Herramientas para uso y manejo de archivos DICOM.
 //!
-//! Uso básico: `dcmtk <archivo.dcm>` muestra información resumida del estudio.
+//! Uso básico: `dcmtk <archivo.dcm> [archivo2.dcm ...]` muestra información resumida de cada estudio.
 
 use dicom::dictionary_std::tags;
 use dicom::object::open_file;
@@ -41,28 +41,8 @@ fn format_datetime(date_str: &str, time_str: &str) -> String {
     }
 }
 
-fn main() {
-    let args: Vec<String> = env::args().collect();
-    if args.len() < 2 {
-        eprintln!("Uso: dcmtk <archivo.dcm>");
-        eprintln!("Ejemplo: dcmtk myfile.dcm");
-        std::process::exit(1);
-    }
-
-    let path = Path::new(&args[1]);
-    if !path.exists() {
-        eprintln!("Error: el archivo no existe: {}", path.display());
-        std::process::exit(1);
-    }
-
-    let obj = match open_file(path) {
-        Ok(o) => o,
-        Err(e) => {
-            eprintln!("Error al abrir el archivo DICOM: {}", e);
-            std::process::exit(1);
-        }
-    };
-
+/// Extrae la fila de datos (accession, patient_name, modality, date) de un objeto DICOM abierto.
+fn extract_row(obj: &dicom::object::DefaultDicomObject) -> (String, String, String, String) {
     let accession = obj
         .attr_opt(tags::ACCESSION_NUMBER)
         .ok()
@@ -114,7 +94,38 @@ fn main() {
         format_datetime(&study_date, &study_time)
     };
 
-    // Títulos y datos truncados al ancho máximo de cada columna
+    (accession, patient_name, modality, date_display)
+}
+
+fn main() {
+    let args: Vec<String> = env::args().collect();
+    if args.len() < 2 {
+        eprintln!("Uso: dcmtk <archivo.dcm> [archivo2.dcm ...]");
+        eprintln!("Ejemplo: dcmtk myfile.dcm");
+        std::process::exit(1);
+    }
+
+    let paths: Vec<&Path> = args[1..].iter().map(Path::new).collect();
+
+    for path in &paths {
+        if !path.exists() {
+            eprintln!("Error: el archivo no existe: {}", path.display());
+            std::process::exit(1);
+        }
+    }
+
+    let mut rows = Vec::with_capacity(paths.len());
+    for path in &paths {
+        let obj = match open_file(path) {
+            Ok(o) => o,
+            Err(e) => {
+                eprintln!("Error al abrir el archivo DICOM: {}", e);
+                std::process::exit(1);
+            }
+        };
+        rows.push(extract_row(&obj));
+    }
+
     let h_acc = truncate_to_width("Accession Number", W_ACCESSION);
     let h_name = truncate_to_width("Patient Name", W_NAME);
     let h_mod = truncate_to_width("Modality", W_MODALITY);
@@ -124,11 +135,13 @@ fn main() {
         "  {:<W_ACCESSION$}  {:<W_NAME$}  {:<W_MODALITY$}  {:<W_DATE$}",
         h_acc, h_name, h_mod, h_date
     );
-    println!(
-        "  {:<W_ACCESSION$}  {:<W_NAME$}  {:<W_MODALITY$}  {:<W_DATE$}",
-        truncate_to_width(&accession, W_ACCESSION),
-        truncate_to_width(&patient_name, W_NAME),
-        truncate_to_width(&modality, W_MODALITY),
-        truncate_to_width(&date_display, W_DATE)
-    );
+    for (accession, patient_name, modality, date_display) in rows {
+        println!(
+            "  {:<W_ACCESSION$}  {:<W_NAME$}  {:<W_MODALITY$}  {:<W_DATE$}",
+            truncate_to_width(&accession, W_ACCESSION),
+            truncate_to_width(&patient_name, W_NAME),
+            truncate_to_width(&modality, W_MODALITY),
+            truncate_to_width(&date_display, W_DATE)
+        );
+    }
 }

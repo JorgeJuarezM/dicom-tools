@@ -23,13 +23,14 @@ A continuación se describe el comportamiento que el programa debe tener para qu
 
 ### Interfaz de línea de comandos
 
-- **Argumentos:** un único argumento posicional: la ruta del archivo DICOM.
+- **Argumentos:** uno o más argumentos posicionales; cada uno es la ruta de un archivo DICOM. Se procesan en el orden indicado.
 - **Sin argumentos:** imprimir en stderr exactamente:
-  - `Uso: dcmtk <archivo.dcm>`
+  - `Uso: dcmtk <archivo.dcm> [archivo2.dcm ...]`
   - `Ejemplo: dcmtk myfile.dcm`
   - Salir con código 1.
 - **Archivo inexistente:** imprimir en stderr `Error: el archivo no existe: ` seguido de la ruta (tal como se pasó). Salir con código 1.
 - **Error al abrir/parsear DICOM:** imprimir en stderr `Error al abrir el archivo DICOM: ` seguido del mensaje de error. Salir con código 1.
+- **Múltiples archivos:** si se pasan varias rutas, se valida que todos existan antes de abrir ninguno. Si alguna no existe, se reporta y se sale con 1. Luego se abren y parsean en orden; si alguno falla al abrir, se reporta y se sale con 1. La salida es una sola cabecera y una fila por archivo (mismo formato de columnas).
 
 ### Tags DICOM utilizados
 
@@ -45,7 +46,7 @@ A continuación se describe el comportamiento que el programa debe tener para qu
 
 ### Formato de la salida (stdout)
 
-- **Dos líneas:** primera = cabecera (títulos de columna), segunda = datos del archivo.
+- **Líneas:** primera línea = cabecera (títulos de columna). A continuación, una línea por cada archivo DICOM pasado como argumento, con los mismos anchos y formato de columnas.
 - **Prefijo de línea:** dos espacios al inicio de cada línea (`  `).
 - **Columnas y anchos fijos (en caracteres):**
 
@@ -70,11 +71,10 @@ A continuación se describe el comportamiento que el programa debe tener para qu
 
 ### Resumen de comportamiento esperado
 
-1. Validar argumentos y existencia del archivo; en caso de error, mensaje en stderr y exit 1.
-2. Abrir el archivo DICOM con la API del crate `dicom`; en caso de error, mensaje en stderr y exit 1.
-3. Obtener los cinco tags anteriores con `attr_opt`, normalizando a string vacío si faltan.
-4. Construir la cadena de fecha a partir de Study Date y Study Time según la regla anterior.
-5. Truncar cada valor (y cada título de columna) al ancho de su columna (por caracteres, UTF-8 safe).
-6. Imprimir las dos líneas con el formato indicado (prefijo `  `, columnas separadas por espacios, anchos fijos).
+1. Validar que haya al menos un argumento; si no, mensaje de uso en stderr y exit 1.
+2. Validar que todos los paths existan; si alguno no existe, mensaje en stderr y exit 1.
+3. Abrir cada archivo DICOM con la API del crate `dicom` en orden; si alguno falla, mensaje en stderr y exit 1.
+4. Para cada archivo: obtener los cinco tags con `attr_opt`, normalizando a string vacío si faltan; construir la cadena de fecha según la regla anterior; truncar cada valor al ancho de su columna (por caracteres, UTF-8 safe).
+5. Imprimir una línea de cabecera (títulos truncados al ancho de columna) y luego una línea por archivo con el formato indicado (prefijo `  `, columnas separadas por espacios, anchos fijos).
 
 Cualquier cambio de comportamiento debe reflejarse aquí y en `README.MD` para mantener la coherencia entre especificación, código y documentación de usuario.
