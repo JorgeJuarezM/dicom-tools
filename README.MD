@@ -6,7 +6,29 @@ Herramientas en Rust para el uso y manejo de archivos DICOM.
 
 - Rust (edición 2021). Dependencia principal: crate `dicom` 0.9 (DICOM-rs).
 
-## Compilación
+## Instalación desde GitHub (con Cargo)
+
+Si tienes Rust y Cargo instalados, puedes instalar el ejecutable `dcmtk` directamente desde el repositorio:
+
+```bash
+cargo install --git https://github.com/tu-usuario/dcm-toolkit.git
+```
+
+Sustituye `tu-usuario/dcm-toolkit` por la ruta real de tu repositorio (por ejemplo `jorgejuarez/dcm-toolkit`).
+
+Para instalar una rama o etiqueta concreta:
+
+```bash
+# Rama específica (p. ej. main o develop)
+cargo install --git https://github.com/tu-usuario/dcm-toolkit.git --branch main
+
+# Etiqueta o versión (p. ej. v0.1.0)
+cargo install --git https://github.com/tu-usuario/dcm-toolkit.git --tag v0.1.0
+```
+
+Tras la instalación, el binario `dcmtk` quedará en el directorio de binarios de Cargo (por defecto `~/.cargo/bin`). Asegúrate de que esa ruta esté en tu `PATH` para poder ejecutar `dcmtk` desde cualquier terminal.
+
+## Compilación (desarrollo)
 
 ```bash
 cargo build --release
