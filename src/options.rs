@@ -54,7 +54,7 @@ pub struct CliOptions {
     #[arg(short = 's', long = "show-tags")]
     pub show_tags: bool,
 
-    /// Muestra solo un tag por archivo (una línea por archivo, sin cabecera). Por defecto StudyInstanceUID; con -q se usa el tag indicado (solo uno).
+    /// Muestra solo un tag por archivo (una línea por archivo, sin cabecera). Por defecto SOPInstanceUID; con -q se usa el tag indicado (solo uno).
     #[arg(short = 't', long = "single-tag")]
     pub single_tag: bool,
 

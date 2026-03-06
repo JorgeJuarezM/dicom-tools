@@ -68,11 +68,11 @@ fn main() {
     print_table(&columns, &rows);
 }
 
-/// Modo -t: muestra solo un tag por archivo (una línea por archivo, sin cabecera). Por defecto StudyInstanceUID; con -q un solo tag.
+/// Modo -t: muestra solo un tag por archivo (una línea por archivo, sin cabecera). Por defecto SOPInstanceUID; con -q un solo tag.
 fn run_single_tag(opts: &CliOptions) -> Result<(), String> {
     let files = opts.files();
     if files.is_empty() {
-        return Err("Uso con -t: dcmtk -t [opciones] <archivo.dcm> [archivo2.dcm ...]\nPor defecto se muestra StudyInstanceUID; use -q TAG para otro tag (solo uno).".into());
+        return Err("Uso con -t: dcmtk -t [opciones] <archivo.dcm> [archivo2.dcm ...]\nPor defecto se muestra SOPInstanceUID; use -q TAG para otro tag (solo uno).".into());
     }
     let column = QueryColumn::single_tag_column(opts.query_keywords().as_deref())
         .map_err(|e| e.to_string())?;

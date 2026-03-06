@@ -59,7 +59,7 @@ impl QueryColumn {
         ]
     }
 
-    /// Resuelve un único tag para el modo -t/--single-tag. Por defecto StudyInstanceUID; si se pasa un keyword (p. ej. desde -q), debe ser solo uno.
+    /// Resuelve un único tag para el modo -t/--single-tag. Por defecto SOPInstanceUID; si se pasa un keyword (p. ej. desde -q), debe ser solo uno.
     pub fn single_tag_column(keywords: Option<&[String]>) -> Result<QueryColumn, String> {
         let kw = match keywords {
             None => return Ok(column_from_tag(&StandardDataDictionary, tags::SOP_INSTANCE_UID)),

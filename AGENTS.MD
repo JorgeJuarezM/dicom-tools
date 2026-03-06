@@ -108,7 +108,7 @@ A continuación se describe el comportamiento que el programa debe tener para qu
 - **Sintaxis:** `-t [opciones] <archivo.dcm> [archivo2.dcm ...]`. Se aceptan uno o más archivos.
 - **Tag por defecto:** StudyInstanceUID. Si se combina con `-q`, el tag es el indicado en `-q`; en ese caso **solo se permite un keyword** en `-q` (si hay más de uno, error "Con -t/--single-tag y -q solo se permite un tag.", exit 1).
 - **Salida:** una línea por archivo con únicamente el valor del tag elegido (sin título de columna).
-- **Errores:** sin archivos → mensaje "Uso con -t: dcmtk -t [opciones] <archivo.dcm> ..." y "Por defecto se muestra StudyInstanceUID; use -q TAG para otro tag (solo uno).", exit 1. Con `-q` y más de un keyword → "Con -t/--single-tag y -q solo se permite un tag.", exit 1.
+- **Errores:** sin archivos → mensaje "Uso con -t: dcmtk -t [opciones] <archivo.dcm> ..." y "Por defecto se muestra SOPInstanceUID; use -q TAG para otro tag (solo uno).", exit 1. Con `-q` y más de un keyword → "Con -t/--single-tag y -q solo se permite un tag.", exit 1.
 - **Ejemplos de uso:**
   - `dcmtk -t myfile.dcm` → una línea con el StudyInstanceUID del archivo.
   - `dcmtk -t -q PatientName myfile.dcm` → una línea con el Patient Name.
