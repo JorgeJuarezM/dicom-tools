@@ -1,9 +1,12 @@
 //! Definición de columnas consultables, extracción de valores y formato de tabla.
 //!
-//! Diseño genérico: una columna tiene keyword, cabecera, ancho y una forma de
-//! extraer el valor de un objeto DICOM. Nuevas columnas se añaden al enum y a
-//! `from_keyword`.
+//! Cualquier tag del estándar DICOM puede usarse vía -q; el diccionario estándar
+//! resuelve el keyword al tag y al nombre para la cabecera. Ancho = max(10, len(nombre)).
 
+use dicom::core::Tag;
+use dicom::core::dictionary::DataDictionary;
+use dicom::core::dictionary::DataDictionaryEntry;
+use dicom::dictionary_std::data_element::StandardDataDictionary;
 use dicom::dictionary_std::tags;
 use dicom::object::open_file;
 use dicom::object::DefaultDicomObject;
@@ -11,98 +14,123 @@ use dicom::object::DicomAttribute as _;
 use dicom::object::DicomObject as _;
 use std::path::Path;
 
-/// Columna consultable: keyword para -q, cabecera para la tabla y ancho fijo.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum QueryColumn {
-    AccessionNumber,
-    PatientName,
-    Modality,
+const DEFAULT_WIDTH_MIN: usize = 10;
+
+/// Tipo de columna: un tag DICOM o la columna compuesta "Date".
+#[derive(Debug, Clone)]
+pub enum QueryColumnKind {
+    Tag(Tag),
     Date,
-    StudyId,
+}
+
+/// Columna consultable: cabecera, ancho (max(10, len(cabecera))) y forma de extraer el valor.
+#[derive(Debug, Clone)]
+pub struct QueryColumn {
+    pub header: String,
+    pub width: usize,
+    kind: QueryColumnKind,
 }
 
 impl QueryColumn {
-    /// Keywords aceptados por -q (sin espacios). Añadir aquí al extender columnas.
-    #[allow(dead_code)]
-    pub fn keyword(&self) -> &'static str {
-        match self {
-            Self::AccessionNumber => "AccessionNumber",
-            Self::PatientName => "PatientName",
-            Self::Modality => "Modality",
-            Self::Date => "Date",
-            Self::StudyId => "StudyId",
-        }
+    pub fn header(&self) -> &str {
+        &self.header
     }
 
-    /// Cabecera mostrada en la tabla.
-    pub fn header(&self) -> &'static str {
-        match self {
-            Self::AccessionNumber => "Accession Number",
-            Self::PatientName => "Patient Name",
-            Self::Modality => "Modality",
-            Self::Date => "Date",
-            Self::StudyId => "Study ID",
-        }
-    }
-
-    /// Ancho fijo de la columna (caracteres).
     pub fn width(&self) -> usize {
-        match self {
-            Self::AccessionNumber => 20,
-            Self::PatientName => 28,
-            Self::Modality => 10,
-            Self::Date => 22,
-            Self::StudyId => 40,
-        }
-    }
-
-    /// Parsea un keyword (como en -q) al enum. Case-sensitive.
-    pub fn from_keyword(s: &str) -> Option<Self> {
-        match s.trim() {
-            "AccessionNumber" => Some(Self::AccessionNumber),
-            "PatientName" => Some(Self::PatientName),
-            "Modality" => Some(Self::Modality),
-            "Date" => Some(Self::Date),
-            "StudyId" => Some(Self::StudyId),
-            _ => None,
-        }
-    }
-
-    /// Lista de columnas por defecto cuando no se usa -q.
-    pub fn default_columns() -> &'static [QueryColumn] {
-        &[
-            QueryColumn::AccessionNumber,
-            QueryColumn::PatientName,
-            QueryColumn::Modality,
-            QueryColumn::Date,
-        ]
-    }
-
-    /// Resuelve una lista de keywords a columnas. Devuelve error si algún keyword es desconocido.
-    pub fn from_keywords(keywords: &[&str]) -> Result<Vec<QueryColumn>, String> {
-        let mut cols = Vec::with_capacity(keywords.len());
-        for k in keywords {
-            match Self::from_keyword(k) {
-                Some(c) => cols.push(c),
-                None => return Err(format!("Columna desconocida: {}", k)),
-            }
-        }
-        Ok(cols)
+        self.width
     }
 
     /// Extrae el valor de esta columna desde un objeto DICOM abierto.
     pub fn extract(&self, obj: &DefaultDicomObject) -> String {
-        match self {
-            Self::AccessionNumber => get_str_attr(obj, tags::ACCESSION_NUMBER),
-            Self::PatientName => get_str_attr(obj, tags::PATIENT_NAME),
-            Self::Modality => get_str_attr(obj, tags::MODALITY),
-            Self::Date => format_study_datetime(obj),
-            Self::StudyId => get_str_attr(obj, tags::STUDY_ID),
+        match &self.kind {
+            QueryColumnKind::Tag(tag) => get_str_attr(obj, *tag),
+            QueryColumnKind::Date => format_study_datetime(obj),
         }
+    }
+
+    /// Lista de columnas por defecto cuando no se usa -q.
+    pub fn default_columns() -> Vec<QueryColumn> {
+        let dict = StandardDataDictionary;
+        vec![
+            column_from_tag(&dict, tags::ACCESSION_NUMBER),
+            column_from_tag(&dict, tags::PATIENT_NAME),
+            column_from_tag(&dict, tags::MODALITY),
+            default_date_column(),
+        ]
+    }
+
+    /// Resuelve una lista de keywords (como en -q) a columnas usando el diccionario estándar.
+    /// "Date" es una columna compuesta (StudyDate + StudyTime); el resto se buscan por keyword.
+    pub fn from_keywords(keywords: &[&str]) -> Result<Vec<QueryColumn>, String> {
+        let dict = StandardDataDictionary;
+        let mut cols = Vec::with_capacity(keywords.len());
+        for k in keywords {
+            let s = k.trim();
+            if s.is_empty() {
+                continue;
+            }
+            if s.eq_ignore_ascii_case("Date") {
+                cols.push(default_date_column());
+                continue;
+            }
+            let entry = dict
+                .by_name(s)
+                .ok_or_else(|| format!("Columna desconocida: {}", k))?;
+            cols.push(column_from_entry(entry));
+        }
+        if cols.is_empty() {
+            return Err("No se especificó ninguna columna válida".into());
+        }
+        Ok(cols)
     }
 }
 
-fn get_str_attr(obj: &DefaultDicomObject, tag: dicom::core::Tag) -> String {
+/// Construye una columna desde una entrada del diccionario. Ancho = max(10, len(header)).
+fn column_from_entry(entry: &impl DataDictionaryEntry) -> QueryColumn {
+    let alias = entry.alias();
+    let header = format_keyword_display(alias);
+    let width = DEFAULT_WIDTH_MIN.max(header.chars().count());
+    QueryColumn {
+        header,
+        width,
+        kind: QueryColumnKind::Tag(entry.tag()),
+    }
+}
+
+fn column_from_tag(dict: &StandardDataDictionary, tag: Tag) -> QueryColumn {
+    let entry = dict
+        .by_tag(tag)
+        .expect("tag estándar debe existir en el diccionario");
+    column_from_entry(entry)
+}
+
+fn default_date_column() -> QueryColumn {
+    QueryColumn {
+        header: "Date".to_string(),
+        width: DEFAULT_WIDTH_MIN.max("Date".len()),
+        kind: QueryColumnKind::Date,
+    }
+}
+
+/// Convierte un keyword DICOM (alias) en texto para cabecera: "PatientName" -> "Patient Name".
+fn format_keyword_display(alias: &str) -> String {
+    let mut s = String::with_capacity(alias.len() + 8);
+    let mut prev_lower = false;
+    for c in alias.chars() {
+        if c.is_uppercase() && prev_lower {
+            s.push(' ');
+        }
+        prev_lower = c.is_lowercase() || c.is_numeric();
+        if s.is_empty() {
+            s.extend(c.to_uppercase());
+        } else {
+            s.push(c);
+        }
+    }
+    s
+}
+
+fn get_str_attr(obj: &DefaultDicomObject, tag: Tag) -> String {
     obj.attr_opt(tag)
         .ok()
         .flatten()
@@ -145,7 +173,6 @@ pub fn truncate_to_width(s: &str, max_chars: usize) -> String {
 const LINE_PREFIX: &str = "  ";
 
 /// Imprime la tabla: una línea de cabecera y una por cada fila.
-/// Las celdas se truncan al ancho de cada columna.
 pub fn print_table(columns: &[QueryColumn], rows: &[Vec<String>]) {
     print_header_line(columns);
     for row in rows {

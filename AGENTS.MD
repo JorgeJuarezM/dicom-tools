@@ -75,14 +75,14 @@ A continuación se describe el comportamiento que el programa debe tener para qu
 ### Modificadores
 
 - **`-q` / `--query`:** lista de columnas a mostrar (keywords DICOM separados por coma). Si no se especifica, se usan las columnas por defecto (Accession Number, Patient Name, Modality, Date).
-- **Keywords admitidos (case-sensitive):** `AccessionNumber`, `PatientName`, `Modality`, `Date`, `StudyId`.
+- **Keywords admitidos (case-sensitive):** Cualquier tag definido en el estándar DICOM. Se debe usar el diccionario estándar (p. ej. `StandardDataDictionary` y `DataDictionary::by_name`) para resolver el keyword al tag y al nombre para la cabecera. El ancho de la columna por defecto debe ser **10 caracteres o el tamaño del nombre del tag (el que resulte mayor)**. La columna compuesta "Date" (StudyDate + StudyTime) se admite como keyword "Date"; el resto se buscan en el diccionario (p. ej. "PatientName", "StudyID", "SOPInstanceUID").
 - **Ejemplo:** `dcmtk -q PatientName,AccessionNumber,StudyId myfile.dcm`  
   Salida: una línea de cabecera con "Patient Name", "Accession Number", "Study ID", y una fila por archivo con los valores (mismo formato de anchos y truncado). Si un keyword es desconocido, se imprime en stderr "Columna desconocida: <keyword>" y se sale con 1.
 
 ### Resumen de comportamiento esperado
 
 1. Parsear argumentos (p. ej. con `clap`): opción `-q/--query` opcional, uno o más archivos posicionales. Validar que haya al menos un archivo; si no, imprimir en stderr "Uso: dcmtk <archivo.dcm> [archivo2.dcm ...]" y "Ejemplo: dcmtk myfile.dcm", y exit 1.
-2. Si hay `-q`, resolver la lista de keywords a columnas (`QueryColumn`); si algún keyword es desconocido, mensaje "Columna desconocida: <keyword>" y exit 1. Si no hay `-q`, usar columnas por defecto.
+2. Si hay `-q`, resolver la lista de keywords a columnas con el diccionario estándar DICOM (`by_name`); si algún keyword no existe en el diccionario, mensaje "Columna desconocida: <keyword>" y exit 1. Si no hay `-q`, usar columnas por defecto (AccessionNumber, PatientName, Modality, Date).
 3. Validar que todos los paths existan; si alguno no existe, mensaje en stderr y exit 1.
 4. Abrir cada archivo DICOM con la API del crate `dicom` en orden; si alguno falla, mensaje en stderr y exit 1.
 5. Para cada archivo: extraer los valores de las columnas elegidas (tags con `attr_opt` o campo compuesto Date); truncar cada valor al ancho de su columna (por caracteres, UTF-8 safe).
@@ -91,8 +91,8 @@ A continuación se describe el comportamiento que el programa debe tener para qu
 ### Arquitectura del código (escalable y reutilizable)
 
 - **Opciones CLI:** el módulo `options` define `CliOptions` (p. ej. con `clap::Parser`). Las opciones se tratan de forma abstracta: nuevos modificadores se añaden como campos y se resuelven en un solo lugar.
-- **Columnas:** el módulo `columns` define el enum `QueryColumn` (una variante por columna consultable). Cada variante conoce su keyword, cabecera, ancho y cómo extraer el valor del objeto DICOM (`extract`). Añadir una columna nueva implica una nueva variante y su implementación en `from_keyword` y `extract`. La extracción de atributos opcionales se centraliza (p. ej. `get_str_attr`) para no repetir el manejo de `attr_opt`/vacío.
-- **Tabla:** `print_table(columns, rows)` y `extract_row_from_path(path, columns)` son genéricos respecto a la lista de columnas; el formato y el truncado se derivan de `QueryColumn` (cabecera, ancho).
+- **Columnas:** el módulo `columns` define la estructura `QueryColumn` (cabecera, ancho, y un `QueryColumnKind`: tag DICOM o columna compuesta "Date"). Las columnas se resuelven desde keywords con el diccionario estándar (`StandardDataDictionary::by_name`); el nombre para la cabecera se obtiene del alias del tag (p. ej. "PatientName" → "Patient Name"). Ancho = max(10, longitud del nombre). La extracción se hace por `attr_opt(tag)` o, para Date, combinando StudyDate y StudyTime.
+- **Tabla:** `print_table(columns, rows)` y `extract_row_from_path(path, columns)` son genéricos respecto a la lista de columnas; el formato y el truncado usan la cabecera y el ancho de cada `QueryColumn`.
 - **Flujo en `main`:** parsear opciones → resolver columnas (por defecto o desde `-q`) → validar paths → extraer una fila por archivo → imprimir tabla. Errores unificados: mensaje en stderr y exit 1.
 
 Cualquier cambio de comportamiento debe reflejarse aquí y en `README.MD` para mantener la coherencia entre especificación, código y documentación de usuario.

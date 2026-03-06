@@ -65,6 +65,6 @@ fn resolve_columns(opts: &CliOptions) -> Result<Vec<QueryColumn>, String> {
             let keywords: Vec<&str> = kw.iter().map(String::as_str).collect();
             QueryColumn::from_keywords(&keywords)
         }
-        None => Ok(QueryColumn::default_columns().to_vec()),
+        None => Ok(QueryColumn::default_columns()),
     }
 }
